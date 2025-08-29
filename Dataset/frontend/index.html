@@ -4,7 +4,204 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Article Manager</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to right, #ece9e6, #ffffff);
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            margin: 2em auto;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2.5em;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 1em;
+        }
+
+        h1 {
+            font-size: 2.5em;
+        }
+
+        h2 {
+            font-size: 1.8em;
+        }
+
+        /* Form Styles */
+        .form-section {
+            margin-bottom: 3em;
+            padding: 2em;
+            background: #fdfdfd;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 1.5em;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-size: 1em;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            border-color: #007BFF;
+            box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+            outline: none;
+        }
+
+        /* Button Styles */
+        button {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #007BFF;
+            color: white;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Articles Section */
+        .articles-section {
+            margin-top: 2em;
+        }
+
+        .article {
+            border: 1px solid #e0e0e0;
+            padding: 1.5em;
+            margin-bottom: 1.5em;
+            border-radius: 10px;
+            background-color: #fff;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+
+        .article:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .article h3 {
+            margin-top: 0;
+        }
+
+        .article a {
+            color: #007BFF;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .article a:hover {
+            text-decoration: underline;
+        }
+
+        /* Biases and Export */
+        .biases, .export-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 1.5em;
+            align-items: center;
+        }
+
+        .biases label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .biases input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .biases label:hover {
+            background: #e0e0e0;
+        }
+
+        /* Status and Hidden Elements */
+        #status {
+            text-align: center;
+            padding: 3em;
+            font-size: 1.5em;
+            color: #555;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Dataset Output */
+        #dataset-output {
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 1.5em;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-top: 1.5em;
+            font-family: 'Courier New', Courier, monospace;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 1em;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .toast.success {
+            background-color: #28a745;
+        }
+        .toast.error {
+            background-color: #dc3545;
+        }
+    </style>
 </head>
 <body>
     <div id="status">
@@ -45,6 +242,166 @@
         </div>
     </div>
 
-    <script src="scripts.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const apiUrl = 'https://prisma-9040.onrender.com';
+
+            const statusDiv = document.getElementById('status');
+            const mainContent = document.getElementById('main-content');
+            const addArticleForm = document.getElementById('add-article-form');
+            const viewArticlesBtn = document.getElementById('view-articles');
+            const exportCsvBtn = document.getElementById('export-csv');
+            const exportParquetBtn = document.getElementById('export-parquet');
+            const exportDatasetBtn = document.getElementById('export-dataset');
+            const articlesList = document.getElementById('articles-list');
+            const datasetOutput = document.getElementById('dataset-output');
+
+            async function checkHealth() {
+                try {
+                    const response = await fetch(`${apiUrl}/health`);
+                    if (response.ok) {
+                        statusDiv.classList.add('hidden');
+                        mainContent.classList.remove('hidden');
+                        mainContent.style.opacity = 0;
+                        fadeIn(mainContent);
+                    } else {
+                        throw new Error('Server not healthy');
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = '<p style="color: red;">Error: Could not connect to the backend server. Please ensure it is running.</p>';
+                    console.error('Health check failed:', error);
+                }
+            }
+
+            addArticleForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+
+                const article = {
+                    url: document.getElementById('url').value,
+                    news_article: document.getElementById('news_article').value,
+                    summary: document.getElementById('summary').value,
+                    bias_religious: document.getElementById('bias_religious').checked,
+                    bias_cultural: document.getElementById('bias_cultural').checked,
+                    bias_language: document.getElementById('bias_language').checked,
+                    bias_gender: document.getElementById('bias_gender').checked,
+                    bias_pro_gov: document.getElementById('bias_pro_gov').checked,
+                    bias_anti_gov: document.getElementById('bias_anti_gov').checked,
+                };
+
+                try {
+                    const response = await fetch(`${apiUrl}/articles/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(article)
+                    });
+                    if (response.ok) {
+                        showToast('Article added successfully!');
+                        addArticleForm.reset();
+                        if (!articlesList.classList.contains('hidden')) {
+                            loadArticles();
+                        }
+                    } else {
+                        showToast('Failed to add article.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('Error connecting to the server.', 'error');
+                }
+            });
+
+            viewArticlesBtn.addEventListener('click', () => {
+                if (articlesList.style.display === 'none' || articlesList.innerHTML === '') {
+                    loadArticles();
+                    articlesList.style.display = 'block';
+                    viewArticlesBtn.textContent = 'Hide Articles';
+                } else {
+                    articlesList.style.display = 'none';
+                    viewArticlesBtn.textContent = 'Show Articles';
+                }
+            });
+
+            exportCsvBtn.addEventListener('click', () => {
+                window.location.href = `${apiUrl}/articles/csv`;
+            });
+
+            exportParquetBtn.addEventListener('click', () => {
+                window.location.href = `${apiUrl}/articles/parquet`;
+            });
+
+            exportDatasetBtn.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`${apiUrl}/articles/dataset`);
+                    const data = await response.json();
+                    datasetOutput.textContent = JSON.stringify(data, null, 2);
+                    datasetOutput.style.display = 'block';
+                    fadeIn(datasetOutput);
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('Error fetching dataset format.', 'error');
+                }
+            });
+
+            async function loadArticles() {
+                try {
+                    const response = await fetch(`${apiUrl}/articles/`);
+                    const articles = await response.json();
+                    articlesList.innerHTML = '';
+                    if (articles.length === 0) {
+                        articlesList.innerHTML = '<p>No articles found.</p>';
+                        return;
+                    }
+                    articles.forEach(article => {
+                        const articleDiv = document.createElement('div');
+                        articleDiv.className = 'article';
+                        let biases = [];
+                        if (article.bias_religious) biases.push('Religious');
+                        if (article.bias_cultural) biases.push('Cultural');
+                        if (article.bias_language) biases.push('Language');
+                        if (article.bias_gender) biases.push('Gender');
+                        if (article.bias_pro_gov) biases.push('Pro Gov');
+                        if (article.bias_anti_gov) biases.push('Anti Gov');
+
+                        articleDiv.innerHTML = `
+                            <h3><a href="${article.url}" target="_blank" rel="noopener noreferrer">${article.url}</a></h3>
+                            <p><strong>Article:</strong> ${article.news_article}</p>
+                            <p><strong>Summary:</strong> ${article.summary}</p>
+                            <p><strong>Biases:</strong> ${biases.join(', ') || 'None'}</p>
+                        `;
+                        articlesList.appendChild(articleDiv);
+                        fadeIn(articleDiv);
+                    });
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('Error fetching articles.', 'error');
+                }
+            }
+
+            function fadeIn(element) {
+                let op = 0.1;
+                element.style.display = 'block';
+                let timer = setInterval(function () {
+                    if (op >= 1){
+                        clearInterval(timer);
+                    }
+                    element.style.opacity = op;
+                    element.style.filter = 'alpha(opacity=' + op * 100 + ")";
+                    op += op * 0.1;
+                }, 10);
+            }
+
+            function showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.textContent = message;
+                toast.className = `toast ${type}`;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            }
+            
+            // Initial health check
+            checkHealth();
+        });
+    </script>
 </body>
 </html>
