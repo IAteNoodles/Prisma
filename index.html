@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="status">
+        <p>Connecting to server...</p>
+    </div>
+
+    <div id="main-content" class="container hidden">
+        <h1>Article Manager</h1>
+
+        <div class="form-section">
+            <h2>Add New Article</h2>
+            <form id="add-article-form">
+                <input type="text" id="url" placeholder="URL" required>
+                <textarea id="news_article" placeholder="News Article Content" rows="5" required></textarea>
+                <textarea id="summary" placeholder="Summary" rows="3" required></textarea>
+                <div class="biases">
+                    <label><input type="checkbox" id="bias_religious"> Religious</label>
+                    <label><input type="checkbox" id="bias_cultural"> Cultural</label>
+                    <label><input type="checkbox" id="bias_language"> Language</label>
+                    <label><input type="checkbox" id="bias_gender"> Gender</label>
+                    <label><input type="checkbox" id="bias_pro_gov"> Pro Gov</label>
+                    <label><input type="checkbox" id="bias_anti_gov"> Anti Gov</label>
+                </div>
+                <button type="submit">Add Article</button>
+            </form>
+        </div>
+
+        <div class="articles-section">
+            <h2>Saved Articles</h2>
+            <button id="view-articles">Show Articles</button>
+            <div class="export-buttons">
+                <button id="export-csv">Export to CSV</button>
+                <button id="export-parquet">Export to Parquet</button>
+                <button id="export-dataset">Export for Dataset Library</button>
+            </div>
+            <div id="articles-list" style="display:none;"></div>
+            <div id="dataset-output" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
