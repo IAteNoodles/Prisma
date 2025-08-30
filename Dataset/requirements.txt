@@ -1,7 +1,9 @@
 fastapi
 uvicorn
+sqlalchemy
 pydantic
 pandas
 pyarrow
 datasets
+mysql
 mysql-connector-python

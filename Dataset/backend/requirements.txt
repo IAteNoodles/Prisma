@@ -5,3 +5,5 @@ pydantic
 pandas
 pyarrow
 datasets
+mysql
+mysql-connector-python
