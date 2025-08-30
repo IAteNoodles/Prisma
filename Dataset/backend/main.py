@@ -57,12 +57,9 @@ def get_db_connection():
             collation='utf8mb4_unicode_ci'
         )
         if connection.is_connected():
-            # This is good for debugging on first run
-            print("Successfully connected to MariaDB.")
             return connection
     except Error as e:
         print(f"Error while connecting to MariaDB: {e}")
-        # This will send a 500 error to the client if the DB is down
         raise HTTPException(status_code=500, detail=f"Database connection error: {e}")
 
 def init_db():
@@ -91,14 +88,11 @@ def init_db():
         print("Database initialized.")
     except Error as e:
         print(f"Error during DB initialization: {e}")
+        raise HTTPException(status_code=500, detail=f"Database initialization failed: {e}")
     finally:
         if connection and connection.is_connected():
             cursor.close()
             connection.close()
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 def get_db():
     """FastAPI dependency to get a DB connection and close it after the request."""
@@ -111,13 +105,22 @@ def get_db():
         if connection and connection.is_connected():
             cursor.close()
             connection.close()
-            # print("MariaDB connection is closed") # Optional: for debugging
 
 # --- API Endpoints ---
 @app.get("/health")
-def health_check():
-    # A more robust health check could try to get a db connection
-    return {"status": "ok"}
+def health_check(db = Depends(get_db)):
+    conn, cursor = db
+    try:
+        cursor.execute("SHOW TABLES LIKE 'articles'")
+        table_exists = cursor.fetchone() is not None
+        return {"status": "ok", "db_initialized": table_exists}
+    except Error as e:
+        return {"status": "error", "db_initialized": False, "detail": str(e)}
+
+@app.post("/initialize-database")
+def initialize_database():
+    init_db()
+    return {"message": "Database initialized successfully."}
 
 @app.post("/articles/", response_model=ArticleResponse)
 def create_article(article: ArticleCreate, db = Depends(get_db)):

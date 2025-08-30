@@ -208,6 +208,12 @@
         <p>Connecting to server...</p>
     </div>
 
+    <div id="init-db-section" class="container hidden">
+        <h1>Database Not Initialized</h1>
+        <p>The required database table ('articles') does not exist. Please initialize it.</p>
+        <button id="init-db-btn">Initialize Database</button>
+    </div>
+
     <div id="main-content" class="container hidden">
         <h1>Article Manager</h1>
 
@@ -248,6 +254,8 @@
 
             const statusDiv = document.getElementById('status');
             const mainContent = document.getElementById('main-content');
+            const initDbSection = document.getElementById('init-db-section');
+            const initDbBtn = document.getElementById('init-db-btn');
             const addArticleForm = document.getElementById('add-article-form');
             const viewArticlesBtn = document.getElementById('view-articles');
             const exportCsvBtn = document.getElementById('export-csv');
@@ -259,19 +267,42 @@
             async function checkHealth() {
                 try {
                     const response = await fetch(`${apiUrl}/health`);
-                    if (response.ok) {
-                        statusDiv.classList.add('hidden');
-                        mainContent.classList.remove('hidden');
-                        mainContent.style.opacity = 0;
-                        fadeIn(mainContent);
+                    const data = await response.json();
+
+                    if (response.ok && data.status === 'ok') {
+                        if (data.db_initialized) {
+                            statusDiv.classList.add('hidden');
+                            mainContent.classList.remove('hidden');
+                            fadeIn(mainContent);
+                        } else {
+                            statusDiv.classList.add('hidden');
+                            initDbSection.classList.remove('hidden');
+                            fadeIn(initDbSection);
+                        }
                     } else {
-                        throw new Error('Server not healthy');
+                        throw new Error(data.detail || 'Server not healthy');
                     }
                 } catch (error) {
-                    statusDiv.innerHTML = '<p style="color: red;">Error: Could not connect to the backend server. Please ensure it is running.</p>';
+                    statusDiv.innerHTML = `<p style="color: red;">Error: Could not connect to the backend server. ${error.message}</p>`;
                     console.error('Health check failed:', error);
                 }
             }
+
+            initDbBtn.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`${apiUrl}/initialize-database`, { method: 'POST' });
+                    if (response.ok) {
+                        showToast('Database initialized successfully! Reloading...');
+                        setTimeout(() => window.location.reload(), 2000);
+                    } else {
+                        const errorData = await response.json();
+                        showToast(`Failed to initialize database: ${errorData.detail}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('Error connecting to the server.', 'error');
+                }
+            });
 
             addArticleForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
