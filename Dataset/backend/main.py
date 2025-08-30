@@ -2,38 +2,22 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datasets import Dataset
 import io
+import mysql.connector
+from mysql.connector import Error
 
-# Database setup
-DATABASE_URL = "sqlite:///./articles.db"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# --- Database Credentials ---
+hostname = "76b2td.h.filess.io"
+database = "Prisma_buildeardo"
+port = 3305  # Use integer for port
+username = "Prisma_buildeardo"
+password = "eb7f884156929ec86b5244b63ab9a35d1bcbd2f9"
 
-# SQLAlchemy model
-class Article(Base):
-    __tablename__ = "articles"
-
-    id = Column(Integer, primary_key=True, index=True)
-    url = Column(String, index=True)
-    news_article = Column(String)
-    summary = Column(String)
-    bias_religious = Column(Boolean, default=False)
-    bias_cultural = Column(Boolean, default=False)
-    bias_language = Column(Boolean, default=False)
-    bias_gender = Column(Boolean, default=False)
-    bias_pro_gov = Column(Boolean, default=False)
-    bias_anti_gov = Column(Boolean, default=False)
-
-Base.metadata.create_all(bind=engine)
-
-# Pydantic model for request body
+# --- Pydantic Models ---
 class ArticleCreate(BaseModel):
     url: str
     news_article: str
@@ -45,63 +29,131 @@ class ArticleCreate(BaseModel):
     bias_pro_gov: bool = False
     bias_anti_gov: bool = False
 
-# Pydantic model for response
 class ArticleResponse(ArticleCreate):
     id: int
 
-    class Config:
-        from_attributes = True
-
+# --- FastAPI App Initialization ---
 app = FastAPI()
 
-# CORS middleware
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
+# --- Database Connection and Initialization ---
+def get_db_connection():
+    """Establishes a new database connection using the user-provided logic."""
     try:
-        yield db
-    finally:
-        db.close()
+        connection = mysql.connector.connect(
+            host=hostname,
+            database=database,
+            user=username,
+            password=password,
+            port=port,
+            collation='utf8mb4_unicode_ci'
+        )
+        if connection.is_connected():
+            # This is good for debugging on first run
+            print("Successfully connected to MariaDB.")
+            return connection
+    except Error as e:
+        print(f"Error while connecting to MariaDB: {e}")
+        # This will send a 500 error to the client if the DB is down
+        raise HTTPException(status_code=500, detail=f"Database connection error: {e}")
 
+def init_db():
+    """Initializes the database table if it doesn't exist."""
+    create_table_query = """
+    CREATE TABLE IF NOT EXISTS articles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        url VARCHAR(255),
+        news_article TEXT,
+        summary TEXT,
+        bias_religious BOOLEAN DEFAULT FALSE,
+        bias_cultural BOOLEAN DEFAULT FALSE,
+        bias_language BOOLEAN DEFAULT FALSE,
+        bias_gender BOOLEAN DEFAULT FALSE,
+        bias_pro_gov BOOLEAN DEFAULT FALSE,
+        bias_anti_gov BOOLEAN DEFAULT FALSE,
+        INDEX(url)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    """
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute(create_table_query)
+        connection.commit()
+        print("Database initialized.")
+    except Error as e:
+        print(f"Error during DB initialization: {e}")
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+def get_db():
+    """FastAPI dependency to get a DB connection and close it after the request."""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        yield connection, cursor
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+            # print("MariaDB connection is closed") # Optional: for debugging
+
+# --- API Endpoints ---
 @app.get("/health")
 def health_check():
+    # A more robust health check could try to get a db connection
     return {"status": "ok"}
 
 @app.post("/articles/", response_model=ArticleResponse)
-def create_article(article: ArticleCreate, db: Session = Depends(get_db)):
-    db_article = Article(**article.model_dump())
-    db.add(db_article)
-    db.commit()
-    db.refresh(db_article)
-    return db_article
+def create_article(article: ArticleCreate, db = Depends(get_db)):
+    conn, cursor = db
+    query = """
+    INSERT INTO articles (url, news_article, summary, bias_religious, bias_cultural, bias_language, bias_gender, bias_pro_gov, bias_anti_gov)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    values = (article.url, article.news_article, article.summary, article.bias_religious, article.bias_cultural, article.bias_language, article.bias_gender, article.bias_pro_gov, article.bias_anti_gov)
+    
+    try:
+        cursor.execute(query, values)
+        conn.commit()
+        new_id = cursor.lastrowid
+        return ArticleResponse(id=new_id, **article.model_dump())
+    except Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
 @app.get("/articles/", response_model=list[ArticleResponse])
-def read_articles(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    articles = db.query(Article).offset(skip).limit(limit).all()
+def read_articles(skip: int = 0, limit: int = 100, db = Depends(get_db)):
+    _, cursor = db
+    query = "SELECT * FROM articles LIMIT %s OFFSET %s"
+    cursor.execute(query, (limit, skip))
+    articles = cursor.fetchall()
     return articles
 
-def get_articles_as_df(db: Session):
-    articles = db.query(Article).all()
-    if not articles:
-        return pd.DataFrame()
-    # Manually remove the SQLAlchemy instance state
-    article_list = []
-    for article in articles:
-        d = article.__dict__.copy()
-        d.pop('_sa_instance_state', None)
-        article_list.append(d)
-    return pd.DataFrame(article_list)
+def get_articles_as_df(db):
+    conn, cursor = db
+    query = "SELECT * FROM articles"
+    cursor.execute(query)
+    articles = cursor.fetchall()
+    return pd.DataFrame(articles)
 
 @app.get("/articles/csv")
-def export_articles_csv(db: Session = Depends(get_db)):
+def export_articles_csv(db = Depends(get_db)):
     df = get_articles_as_df(db)
     stream = io.StringIO()
     df.to_csv(stream, index=False)
@@ -110,7 +162,7 @@ def export_articles_csv(db: Session = Depends(get_db)):
     return response
 
 @app.get("/articles/parquet")
-def export_articles_parquet(db: Session = Depends(get_db)):
+def export_articles_parquet(db = Depends(get_db)):
     df = get_articles_as_df(db)
     stream = io.BytesIO()
     df.to_parquet(stream, index=False)
@@ -119,13 +171,13 @@ def export_articles_parquet(db: Session = Depends(get_db)):
     return response
 
 @app.get("/articles/dataset")
-def export_articles_dataset(db: Session = Depends(get_db)):
+def export_articles_dataset(db = Depends(get_db)):
     df = get_articles_as_df(db)
     if df.empty:
         return {"data": []}
+    # Convert boolean columns from 0/1 to True/False if needed
+    for col in df.columns:
+        if df[col].dtype == 'int64' and set(df[col].unique()) <= {0, 1}:
+             df[col] = df[col].astype(bool)
     dataset = Dataset.from_pandas(df)
     return dataset.to_dict()
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port = 8000)
