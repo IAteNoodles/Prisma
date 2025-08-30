@@ -289,18 +289,25 @@
             }
 
             initDbBtn.addEventListener('click', async () => {
+                initDbBtn.disabled = true;
+                initDbBtn.textContent = 'Initializing...';
                 try {
                     const response = await fetch(`${apiUrl}/initialize-database`, { method: 'POST' });
+                    const data = await response.json();
+
                     if (response.ok) {
-                        showToast('Database initialized successfully! Reloading...');
+                        showToast(data.message);
                         setTimeout(() => window.location.reload(), 2000);
                     } else {
-                        const errorData = await response.json();
-                        showToast(`Failed to initialize database: ${errorData.detail}`, 'error');
+                        showToast(`Error: ${data.detail}`, 'error');
+                        initDbBtn.disabled = false;
+                        initDbBtn.textContent = 'Initialize Database';
                     }
                 } catch (error) {
                     console.error('Error:', error);
                     showToast('Error connecting to the server.', 'error');
+                    initDbBtn.disabled = false;
+                    initDbBtn.textContent = 'Initialize Database';
                 }
             });
 

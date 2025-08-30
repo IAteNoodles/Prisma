@@ -60,39 +60,8 @@ def get_db_connection():
             return connection
     except Error as e:
         print(f"Error while connecting to MariaDB: {e}")
+        # This will send a 500 error to the client if the DB is down
         raise HTTPException(status_code=500, detail=f"Database connection error: {e}")
-
-def init_db():
-    """Initializes the database table if it doesn't exist."""
-    create_table_query = """
-    CREATE TABLE IF NOT EXISTS articles (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        url VARCHAR(255),
-        news_article TEXT,
-        summary TEXT,
-        bias_religious BOOLEAN DEFAULT FALSE,
-        bias_cultural BOOLEAN DEFAULT FALSE,
-        bias_language BOOLEAN DEFAULT FALSE,
-        bias_gender BOOLEAN DEFAULT FALSE,
-        bias_pro_gov BOOLEAN DEFAULT FALSE,
-        bias_anti_gov BOOLEAN DEFAULT FALSE,
-        INDEX(url)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    """
-    connection = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute(create_table_query)
-        connection.commit()
-        print("Database initialized.")
-    except Error as e:
-        print(f"Error during DB initialization: {e}")
-        raise HTTPException(status_code=500, detail=f"Database initialization failed: {e}")
-    finally:
-        if connection and connection.is_connected():
-            cursor.close()
-            connection.close()
 
 def get_db():
     """FastAPI dependency to get a DB connection and close it after the request."""
@@ -115,12 +84,41 @@ def health_check(db = Depends(get_db)):
         table_exists = cursor.fetchone() is not None
         return {"status": "ok", "db_initialized": table_exists}
     except Error as e:
+        # This can happen if the database itself doesn't exist
         return {"status": "error", "db_initialized": False, "detail": str(e)}
 
 @app.post("/initialize-database")
-def initialize_database():
-    init_db()
-    return {"message": "Database initialized successfully."}
+def initialize_database(db = Depends(get_db)):
+    conn, cursor = db
+    try:
+        # Check if table exists
+        cursor.execute("SHOW TABLES LIKE 'articles'")
+        if cursor.fetchone():
+            return {"message": "Table 'articles' already exists."}
+
+        # If not, create it
+        create_table_query = """
+        CREATE TABLE articles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            url VARCHAR(255),
+            news_article TEXT,
+            summary TEXT,
+            bias_religious BOOLEAN DEFAULT FALSE,
+            bias_cultural BOOLEAN DEFAULT FALSE,
+            bias_language BOOLEAN DEFAULT FALSE,
+            bias_gender BOOLEAN DEFAULT FALSE,
+            bias_pro_gov BOOLEAN DEFAULT FALSE,
+            bias_anti_gov BOOLEAN DEFAULT FALSE,
+            INDEX(url)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """
+        cursor.execute(create_table_query)
+        conn.commit()
+        return {"message": "Table 'articles' created successfully."}
+    except Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database operation failed: {e}")
+
 
 @app.post("/articles/", response_model=ArticleResponse)
 def create_article(article: ArticleCreate, db = Depends(get_db)):
